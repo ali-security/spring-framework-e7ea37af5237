@@ -16,6 +16,7 @@
 
 package org.springframework.expression.spel;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -38,6 +39,7 @@ import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.expression.spel.testresources.Inventor;
 import org.springframework.expression.spel.testresources.Person;
 import org.springframework.expression.spel.testresources.RecordPerson;
+import org.springframework.util.ClassUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -187,6 +189,16 @@ class PropertyAccessTests extends AbstractExpressionTests {
 		assertThat(expr.getValue(context, target)).isEqualTo("p2");
 
 		assertThatSpelEvaluationException()
+				.isThrownBy(() -> parser.parseExpression("nonexistent").getValue(context, target))
+				.extracting(SpelEvaluationException::getMessageCode).isEqualTo(SpelMessage.PROPERTY_OR_FIELD_NOT_READABLE);
+
+		Method getInvalid = ClassUtils.getMethod(Person.class, "getInvalid");
+		assertThat(getInvalid.getReturnType()).isEqualTo(void.class);
+		assertThatSpelEvaluationException()
+				.isThrownBy(() -> parser.parseExpression("invalid").getValue(context, target))
+				.extracting(SpelEvaluationException::getMessageCode).isEqualTo(SpelMessage.PROPERTY_OR_FIELD_NOT_READABLE);
+
+		assertThatSpelEvaluationException()
 				.isThrownBy(() -> parser.parseExpression("name='p3'").getValue(context, target))
 				.extracting(SpelEvaluationException::getMessageCode).isEqualTo(SpelMessage.NOT_ASSIGNABLE);
 
@@ -284,6 +296,51 @@ class PropertyAccessTests extends AbstractExpressionTests {
 			.extracting(SpelEvaluationException::getMessageCode).isEqualTo(SpelMessage.ARRAY_INDEX_OUT_OF_BOUNDS);
 	}
 
+	@Test
+	void voidGetterIsNotInvokedAsPropertyAccessor() {
+		VoidMethodHolder target = new VoidMethodHolder();
+		EvaluationContext readOnlyContext = SimpleEvaluationContext.forReadOnlyDataBinding().build();
+		EvaluationContext standardContext = new StandardEvaluationContext();
+
+		// JavaBean-style getter with void return type: getSideEffect()
+		for (EvaluationContext context : List.of(readOnlyContext, standardContext)) {
+			assertThatSpelEvaluationException()
+					.isThrownBy(() -> parser.parseExpression("sideEffect").getValue(context, target))
+					.extracting(SpelEvaluationException::getMessageCode).isEqualTo(SpelMessage.PROPERTY_OR_FIELD_NOT_READABLE);
+			// Regular non-void getter remains readable
+			assertThat(parser.parseExpression("invocations").getValue(context, target)).isEqualTo(0);
+		}
+		assertThat(target.getInvocations()).isZero();
+	}
+
+	@Test
+	void voidRecordStyleMethodIsNotInvokedAsPropertyAccessor() {
+		VoidMethodHolder target = new VoidMethodHolder();
+		EvaluationContext readOnlyContext = SimpleEvaluationContext.forReadOnlyDataBinding().build();
+		EvaluationContext standardContext = new StandardEvaluationContext();
+
+		// Record-style plain accessor with void return type: shutdown()
+		for (EvaluationContext context : List.of(readOnlyContext, standardContext)) {
+			assertThatSpelEvaluationException()
+					.isThrownBy(() -> parser.parseExpression("shutdown").getValue(context, target))
+					.extracting(SpelEvaluationException::getMessageCode).isEqualTo(SpelMessage.PROPERTY_OR_FIELD_NOT_READABLE);
+		}
+		assertThat(target.getInvocations()).isZero();
+	}
+
+	@Test
+	void staticVoidMethodIsNotInvokedAsPropertyAccessor() {
+		EvaluationContext context = new StandardEvaluationContext();
+
+		// Static void method resolved against a type reference: reset()
+		assertThatSpelEvaluationException()
+				.isThrownBy(() -> parser.parseExpression(
+						"T(org.springframework.expression.spel.PropertyAccessTests$VoidMethodHolder).reset")
+						.getValue(context))
+				.extracting(SpelEvaluationException::getMessageCode).isEqualTo(SpelMessage.PROPERTY_OR_FIELD_NOT_READABLE);
+		assertThat(VoidMethodHolder.staticInvocations).isZero();
+	}
+
 
 	private ThrowableTypeAssert<SpelEvaluationException> assertThatSpelEvaluationException() {
 		return assertThatExceptionOfType(SpelEvaluationException.class);
@@ -370,6 +427,30 @@ class PropertyAccessTests extends AbstractExpressionTests {
 
 		@Override
 		public void write(EvaluationContext context, Object target, String name, Object newValue) {
+		}
+	}
+
+
+	public static class VoidMethodHolder {
+
+		static int staticInvocations = 0;
+
+		private int invocations = 0;
+
+		public int getInvocations() {
+			return this.invocations;
+		}
+
+		public void getSideEffect() {
+			this.invocations++;
+		}
+
+		public void shutdown() {
+			this.invocations++;
+		}
+
+		public static void reset() {
+			staticInvocations++;
 		}
 	}
 
