@@ -68,7 +68,12 @@ public class OperatorBetween extends Operator {
 		Object high = list.get(1);
 		TypeComparator comp = state.getTypeComparator();
 		try {
-			return BooleanTypedValue.forValue(comp.compare(left, low) >= 0 && comp.compare(left, high) <= 0);
+			state.trackOperation();
+			if (comp.compare(left, low) < 0) {
+				return BooleanTypedValue.FALSE;
+			}
+			state.trackOperation();
+			return BooleanTypedValue.forValue(comp.compare(left, high) <= 0);
 		}
 		catch (SpelEvaluationException ex) {
 			ex.setPosition(getStartPosition());

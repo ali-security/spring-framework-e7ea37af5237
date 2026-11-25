@@ -19,9 +19,11 @@ package org.springframework.expression.spel;
 import java.util.Arrays;
 import java.util.List;
 
+import org.springframework.expression.EvaluationContext;
 import org.springframework.expression.Expression;
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
+import org.springframework.expression.spel.support.SimpleEvaluationContext;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.util.ObjectUtils;
 
@@ -207,6 +209,37 @@ public abstract class AbstractExpressionTests {
 				}
 			}
 		});
+	}
+
+	/**
+	 * Evaluate the specified expression against the supplied root object and
+	 * verify that the evaluation performs exactly the expected number of tracked
+	 * operations.
+	 * <p>The expression is first evaluated with a maximum number of operations
+	 * of {@code expectedOperations + 1}, which must succeed, and then with a
+	 * maximum of {@code expectedOperations}, which must fail.
+	 * @param expression the expression to evaluate
+	 * @param rootObject the root object against which to evaluate the expression
+	 * @param expectedOperations the expected number of tracked operations
+	 */
+	protected void assertMaxOperations(String expression, Object rootObject, int expectedOperations) {
+		EvaluationContext evaluationContext = SimpleEvaluationContext.forReadOnlyDataBinding().build();
+
+		Expression expr1 = createParser(expectedOperations + 1).parseExpression(expression);
+		expr1.getValue(evaluationContext, rootObject);
+
+		Expression expr2 = createParser(expectedOperations).parseExpression(expression);
+		assertThatExceptionOfType(SpelEvaluationException.class)
+				.isThrownBy(() -> expr2.getValue(evaluationContext, rootObject))
+				.satisfies(ex -> {
+					assertThat(ex.getMessageCode()).isEqualTo(SpelMessage.MAX_OPERATIONS_EXCEEDED);
+					assertThat(ex.getInserts()).as("inserts").containsExactly(expectedOperations);
+				});
+	}
+
+	private static ExpressionParser createParser(int maxOperations) {
+		return new SpelExpressionParser(new SpelParserConfiguration(SpelCompilerMode.OFF, null, false, false,
+				Integer.MAX_VALUE, SpelParserConfiguration.DEFAULT_MAX_EXPRESSION_LENGTH, maxOperations));
 	}
 
 	/**

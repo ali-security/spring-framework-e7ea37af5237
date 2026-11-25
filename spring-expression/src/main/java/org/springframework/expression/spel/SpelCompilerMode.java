@@ -20,6 +20,9 @@ package org.springframework.expression.spel;
  * Captures the possible configuration settings for a compiler that can be
  * used when evaluating expressions.
  *
+ * <p><strong>WARNING</strong>: Enabling compilation for expressions from untrusted
+ * sources removes the safety guards supported in interpreted mode.
+ *
  * @author Andy Clement
  * @since 4.1
  */
