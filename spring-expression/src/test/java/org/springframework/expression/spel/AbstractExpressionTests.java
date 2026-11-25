@@ -174,6 +174,23 @@ public abstract class AbstractExpressionTests {
 	 * Evaluate the specified expression and ensure the expected message comes out.
 	 * The message may have inserts and they will be checked if otherProperties is specified.
 	 * The first entry in otherProperties should always be the position.
+	 * @param evaluationContext the evaluation context to use
+	 * @param expression the expression to evaluate
+	 * @param expectedReturnType ask the expression return value to be of this type if possible
+	 * ({@code null} indicates don't ask for conversion)
+	 * @param expectedMessage the expected message
+	 * @param otherProperties the expected inserts within the message
+	 */
+	protected void evaluateAndCheckError(EvaluationContext evaluationContext, String expression,
+			Class<?> expectedReturnType, SpelMessage expectedMessage, Object... otherProperties) {
+
+		evaluateAndCheckError(this.parser, evaluationContext, expression, expectedReturnType, expectedMessage, otherProperties);
+	}
+
+	/**
+	 * Evaluate the specified expression and ensure the expected message comes out.
+	 * The message may have inserts and they will be checked if otherProperties is specified.
+	 * The first entry in otherProperties should always be the position.
 	 * @param parser the expression parser to use
 	 * @param expression the expression to evaluate
 	 * @param expectedReturnType ask the expression return value to be of this type if possible
@@ -184,14 +201,32 @@ public abstract class AbstractExpressionTests {
 	protected void evaluateAndCheckError(ExpressionParser parser, String expression, Class<?> expectedReturnType, SpelMessage expectedMessage,
 			Object... otherProperties) {
 
+		evaluateAndCheckError(parser, this.context, expression, expectedReturnType, expectedMessage, otherProperties);
+	}
+
+	/**
+	 * Evaluate the specified expression and ensure the expected message comes out.
+	 * The message may have inserts and they will be checked if otherProperties is specified.
+	 * The first entry in otherProperties should always be the position.
+	 * @param parser the expression parser to use
+	 * @param evaluationContext the evaluation context to use
+	 * @param expression the expression to evaluate
+	 * @param expectedReturnType ask the expression return value to be of this type if possible
+	 * ({@code null} indicates don't ask for conversion)
+	 * @param expectedMessage the expected message
+	 * @param otherProperties the expected inserts within the message
+	 */
+	protected void evaluateAndCheckError(ExpressionParser parser, EvaluationContext evaluationContext,
+			String expression, Class<?> expectedReturnType, SpelMessage expectedMessage, Object... otherProperties) {
+
 		assertThatExceptionOfType(SpelEvaluationException.class).isThrownBy(() -> {
 			Expression expr = parser.parseExpression(expression);
 			assertThat(expr).as("expression").isNotNull();
 			if (expectedReturnType != null) {
-				expr.getValue(context, expectedReturnType);
+				expr.getValue(evaluationContext, expectedReturnType);
 			}
 			else {
-				expr.getValue(context);
+				expr.getValue(evaluationContext);
 			}
 		}).satisfies(ex -> {
 			assertThat(ex.getMessageCode()).isEqualTo(expectedMessage);
